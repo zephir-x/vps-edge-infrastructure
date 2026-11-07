@@ -1,0 +1,47 @@
+﻿services:
+  backend-api:
+    image: ghcr.io/zephir-x/cracow360-api:latest
+    container_name: cracow360_api
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+    volumes:
+      - ./data/db:/app/data/db
+      - ./data/contracts:/app/data/contracts:ro
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - DOTNET_gcServer=0
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/db/cracow360.db
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DeepSeek__ApiKey=${DEEPSEEK_API_KEY:-}
+      - DeepSeek__Model=${DEEPSEEK_MODEL:-deepseek-chat}
+      - DeepSeek__BaseUrl=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+    networks:
+      - cracow360_internal
+
+  frontend-nginx:
+    image: ghcr.io/zephir-x/cracow360-web:latest
+    container_name: cracow360_web
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    depends_on:
+      - backend-api
+    networks:
+      - cracow360_internal
+      - web-proxy
+
+networks:
+  cracow360_internal:
+    driver: bridge
+  web-proxy:
+    external: true

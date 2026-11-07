@@ -1,0 +1,15 @@
+﻿services:
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+    networks:
+      - web-proxy
+
+networks:
+  web-proxy:
+    external: true

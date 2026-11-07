@@ -1,0 +1,74 @@
+﻿services:
+  postgres_db:
+    image: postgres:17-alpine
+    container_name: projecthub_postgres
+    restart: unless-stopped
+    command: postgres -c shared_buffers=64MB -c work_mem=4MB -c max_connections=30
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-projecthub_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-projecthub_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - projecthub_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-projecthub_user} -d ${POSTGRES_DB:-projecthub_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - projecthub_internal
+
+  backend:
+    image: ghcr.io/zephir-x/projecthub-api:latest
+    container_name: projecthub_api
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      DOTNET_gcServer: "0"
+      ConnectionStrings__DefaultConnection: "Host=postgres_db;Port=5432;Database=${POSTGRES_DB:-projecthub_db};Username=${POSTGRES_USER:-projecthub_user};Password=${POSTGRES_PASSWORD}"
+      JwtOptions__Issuer: "${JWT_ISSUER:-ProjectHubApi}"
+      JwtOptions__Audience: "${JWT_AUDIENCE:-ProjectHubClients}"
+      JwtOptions__SecretKey: "${JWT_SECRET}"
+      Cors__AllowedOrigins__0: "https://myprojecthub.com.pl"
+      Cors__AllowedOrigins__1: "http://myprojecthub.com.pl"
+      Cors__AllowedOrigins__2: "https://www.myprojecthub.com.pl"
+      Cors__AllowedOrigins__3: "http://www.myprojecthub.com.pl"
+    networks:
+      - projecthub_internal
+
+  frontend:
+    image: ghcr.io/zephir-x/projecthub-web:latest
+    container_name: projecthub_web
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - projecthub_internal
+      - web-proxy
+
+volumes:
+  projecthub_pgdata:
+
+networks:
+  projecthub_internal:
+    driver: bridge
+  web-proxy:
+    external: true

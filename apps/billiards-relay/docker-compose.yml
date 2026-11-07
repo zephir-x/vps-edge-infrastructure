@@ -1,0 +1,21 @@
+﻿services:
+  billiards-relay:
+    image: ghcr.io/zephir-x/billiards-game-relay:latest
+    container_name: billiards_relay
+    restart: unless-stopped
+    ports:
+      # Maps public NAT TCP port assigned by VPS provider to internal daemon socket
+      - "20117:7777"
+    environment:
+      - RELAY_PORT=7777
+      - DOTNET_gcServer=0
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

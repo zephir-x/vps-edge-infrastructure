@@ -1,0 +1,50 @@
+﻿services:
+  gymcore_db:
+    image: postgres:16-alpine
+    container_name: gymcore_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - gymcore_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - gymcore_internal
+
+  gymcore_api:
+    image: ghcr.io/zephir-x/gymcore-api:latest
+    container_name: gymcore_api
+    depends_on:
+      - gymcore_db
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=gymcore_postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - JwtSettings__Secret=${JWT_SECRET}
+      - Stripe__SecretKey=${STRIPE_SECRET_KEY}
+      - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET}
+      - DeepSeek__ApiKey=${DEEPSEEK_API_KEY}
+      - FrontendUrl=${FRONTEND_URL}
+    restart: unless-stopped
+    networks:
+      - gymcore_internal
+      - web-proxy
+
+  gymcore_frontend:
+    image: ghcr.io/zephir-x/gymcore-frontend:latest
+    container_name: gymcore_frontend
+    depends_on:
+      - gymcore_api
+    restart: unless-stopped
+    networks:
+      - gymcore_internal
+      - web-proxy
+
+volumes:
+  gymcore_postgres_data:
+
+networks:
+  gymcore_internal:
+    driver: bridge
+  web-proxy:
+    external: true

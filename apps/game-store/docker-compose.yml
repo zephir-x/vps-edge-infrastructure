@@ -1,0 +1,48 @@
+﻿services:
+  nginx:
+    image: ghcr.io/zephir-x/gamenest-nginx:latest
+    container_name: game-store-nginx-1
+    restart: unless-stopped
+    depends_on:
+      - php
+    volumes:
+      - gamenest_uploads:/app/public/resources
+    networks:
+      - pg-network
+      - web-proxy
+
+  db:
+    image: postgres:16-alpine
+    container_name: game-store-db-1
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - pg-network
+
+  php:
+    image: ghcr.io/zephir-x/gamenest-php:latest
+    container_name: game-store-php-1
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file:
+      - .env
+    volumes:
+      - gamenest_uploads:/app/public/resources
+    networks:
+      - pg-network
+
+networks:
+  pg-network:
+    driver: bridge
+  web-proxy:
+    external: true
+
+volumes:
+  pg-data:
+  gamenest_uploads:

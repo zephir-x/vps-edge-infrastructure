@@ -1,0 +1,110 @@
+﻿# Reference CI/CD Pipeline Template used across hosted microservices (e.g., ProjectHub, Cracow360)
+# Note: Trigger is set to workflow_dispatch in this infrastructure repository to prevent execution on docs commits.
+name: GHCR Zero-Build Pipeline Template
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend CI (.NET 9)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore NuGet Packages
+        run: dotnet restore project/backend/ProjectHub.sln
+
+      - name: Build Backend Solution
+        run: dotnet build project/backend/ProjectHub.sln --configuration Release --no-restore
+
+      - name: Run Unit & Integration Tests
+        run: dotnet test project/backend/ProjectHub.sln --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
+        env:
+          ASPNETCORE_ENVIRONMENT: Testing
+
+  frontend:
+    name: Frontend CI (React & Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: project/frontend
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: project/frontend/package-lock.json
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Build Frontend Application
+        run: npm run build
+
+  docker-publish:
+    name: Build & Push Images to GHCR
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Prepare GHCR Registry Names
+        run: echo "OWNER_LC=${OWNER,,}" >> ${GITHUB_ENV}
+        env:
+          OWNER: '${{ github.repository_owner }}'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./project/backend
+          file: ./project/backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER_LC }}/projecthub-api:latest
+            ghcr.io/${{ env.OWNER_LC }}/projecthub-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./project/frontend
+          file: ./project/frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER_LC }}/projecthub-web:latest
+            ghcr.io/${{ env.OWNER_LC }}/projecthub-web:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
